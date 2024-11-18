@@ -1,6 +1,8 @@
 package com.example.nagoyameshi.controller;
 
 
+import jakarta.servlet.http.HttpServletRequest;
+
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.stereotype.Controller;
@@ -21,14 +23,10 @@ import com.example.nagoyameshi.security.UserDetailsImpl;
 import com.example.nagoyameshi.service.UserService;
 import com.stripe.Stripe;
 import com.stripe.exception.StripeException;
-import com.stripe.model.Price;
-import com.stripe.model.PriceCollection;
-import com.stripe.model.checkout.Session;
-import com.stripe.param.PriceListParams;
-import com.stripe.param.checkout.SessionCreateParams;
-
-import jakarta.servlet.http.HttpServletRequest;
-
+//import com.stripe.model.checkout.Session;
+//import com.stripe.param.billingportal.SessionCreateParams;
+//import com.stripe.model.checkout.Session;
+//import com.stripe.param.checkout.SessionCreateParams;
 @Controller
 @RequestMapping("/user")
 public class UserController {
@@ -77,21 +75,41 @@ public class UserController {
          
          if (userEditForm.getUseSubscription()) {
        	     Stripe.apiKey = stripeApiKey;
-             String requestUrl = new String(httpServletRequest.getRequestURL());
-             //final String YOUR_DOMAIN = "http://localhost:8080";
-             var key = "有料テスト-2622925";
-             PriceListParams priceParams = PriceListParams.builder().addLookupKey(key).build();
-             PriceCollection prices = Price.list(priceParams);
-             SessionCreateParams params = SessionCreateParams.builder()
-                     .addLineItem(
-                    		 SessionCreateParams.LineItem.builder().setPrice(prices.getData().get(0).getId())
-                    		 .setQuantity(1L).build())
-                     .setMode(SessionCreateParams.Mode.SUBSCRIPTION)
-                     .setSuccessUrl(requestUrl.replaceAll("/user/update", "/user"))
-                     .setCancelUrl(requestUrl.replaceAll("/user/update", "/user/edit"))
-                     .build();
-             Session session = Session.create(params);
-             return String.format("redirect:%s", session.getUrl());
+//           サブスクの登録
+//             String requestUrl = new String(httpServletRequest.getRequestURL());
+//             //final String YOUR_DOMAIN = "http://localhost:8080";
+//             var key = "有料テスト-2622925";
+//             PriceListParams priceParams = PriceListParams.builder().addLookupKey(key).build();
+//             PriceCollection prices = Price.list(priceParams);
+//             SessionCreateParams params = SessionCreateParams.builder()
+//                     .addLineItem(
+//                    		 SessionCreateParams.LineItem.builder().setPrice(prices.getData().get(0).getId())
+//                    		 .setQuantity(1L).build())
+//                     .setMode(SessionCreateParams.Mode.SUBSCRIPTION)
+//                     .setSuccessUrl(requestUrl.replaceAll("/user/update", "/user"))
+//                     .setCancelUrl(requestUrl.replaceAll("/user/update", "/user/edit"))
+//                     .build();
+//          サブスクのクレジットカードの変更
+//             Session session = Session.create(params);
+//       	  SessionCreateParams params =
+//       			  SessionCreateParams.builder()
+//       			    .addPaymentMethodType(SessionCreateParams.PaymentMethodType.CARD)
+//       			    .setMode(SessionCreateParams.Mode.SETUP)
+//       			    .setCustomer("cus_REskj8FYkEV1BS")
+//       			    .setSetupIntentData(
+//       			      SessionCreateParams.SetupIntentData.builder()
+//       			        .putMetadata("customer_id", "cus_REskj8FYkEV1BS")
+//       			        .putMetadata("subscription_id", "sub_1QMOymF5qcndg83GvlhIqX15")
+//       			        .build())
+//       			    .setSuccessUrl("https://example.com/success?session_id={CHECKOUT_SESSION_ID}")
+//       			    .setCancelUrl("https://example.com/cancel")
+//       			    .build();
+//       			Session session = Session.create(params);
+//          サブスクの削除
+//	       	Subscription resource = Subscription.retrieve("sub_1QMOymF5qcndg83GvlhIqX15");
+//	       	SubscriptionCancelParams params = SubscriptionCancelParams.builder().build();
+//	       	Subscription subscription = resource.cancel(params);
+//             return String.format("redirect:%s", session.getUrl());
          }
          
          return "redirect:/user";
