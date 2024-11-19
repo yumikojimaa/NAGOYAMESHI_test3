@@ -3,7 +3,6 @@ package com.example.nagoyameshi.controller;
 
 import jakarta.servlet.http.HttpServletRequest;
 
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
@@ -20,36 +19,49 @@ import com.example.nagoyameshi.entity.User;
 import com.example.nagoyameshi.form.UserEditForm;
 import com.example.nagoyameshi.repository.UserRepository;
 import com.example.nagoyameshi.security.UserDetailsImpl;
+import com.example.nagoyameshi.service.StripeService;
 import com.example.nagoyameshi.service.UserService;
-import com.stripe.Stripe;
-import com.stripe.exception.StripeException;
+//import com.stripe.Stripe;
+//import com.stripe.exception.StripeException;
+//import com.stripe.model.Price;
+//import com.stripe.model.PriceCollection;
 //import com.stripe.model.checkout.Session;
-//import com.stripe.param.billingportal.SessionCreateParams;
+//import com.stripe.param.PriceListParams;
+//import com.stripe.param.checkout.SessionCreateParams;
 //import com.stripe.model.checkout.Session;
 //import com.stripe.param.checkout.SessionCreateParams;
 @Controller
 @RequestMapping("/user")
 public class UserController {
-	@Value("${stripe.api-key}")
-	private String stripeApiKey;
+//	@Value("${stripe.api-key}")
+//	private String stripeApiKey;
 	private final UserRepository userRepository;
 	private final UserService userService;
-	public UserController(UserRepository userRepository, UserService userService) {
+	private final StripeService stripeService;
+	
+	public UserController(UserRepository userRepository, 
+			UserService userService,
+			StripeService stripeService) {
 		this.userRepository = userRepository;
 		this.userService = userService;
+		this.stripeService = stripeService;
 	}
 	@GetMapping
 	public String index(@AuthenticationPrincipal UserDetailsImpl userDetailsImpl, Model model) {
 		User user = userRepository.getReferenceById(userDetailsImpl.getUser().getId());
 		model.addAttribute("user", user);
+		var contract = stripeService.getContract(user);
+		model.addAttribute("plan", (contract != null && !contract.isNormal()) ? "有料" : "無料" );
+		model.addAttribute("canChangeCard",  (contract != null && !contract.isNormal()));
 		return "user/index";
 	}
 	@GetMapping("/edit")
 	public String edit(@AuthenticationPrincipal UserDetailsImpl userDetailsImpl, Model model) {
 		User user = userRepository.getReferenceById(userDetailsImpl.getUser().getId());
+		var contract = stripeService.getContract(user);
 		UserEditForm userEditForm = new UserEditForm(user.getId(), user.getName(), user.getFurigana(), user.getEmail(),
 				user.getPostalCode(), user.getAddress(), user.getPhoneNumber(), user.getBirthday(),
-				user.getOccupation(), false);
+				user.getOccupation(), (contract != null));
 		model.addAttribute("userEditForm", userEditForm);
 		return "user/edit";
 	}
@@ -59,7 +71,7 @@ public class UserController {
     		 BindingResult bindingResult, 
     		 RedirectAttributes redirectAttributes, 
     		 HttpServletRequest httpServletRequest
-    		 ) throws StripeException {
+    		 ) {
          // メールアドレスが変更されており、かつ登録済みであれば、BindingResultオブジェクトにエラー内容を追加する
          if (userService.isEmailChanged(userEditForm) && userService.isEmailRegistered(userEditForm.getEmail())) {
              FieldError fieldError = new FieldError(bindingResult.getObjectName(), "email", "すでに登録済みのメールアドレスです。");
@@ -74,44 +86,29 @@ public class UserController {
          redirectAttributes.addFlashAttribute("successMessage", "会員情報を編集しました。");
          
          if (userEditForm.getUseSubscription()) {
-       	     Stripe.apiKey = stripeApiKey;
-//           サブスクの登録
-//             String requestUrl = new String(httpServletRequest.getRequestURL());
-//             //final String YOUR_DOMAIN = "http://localhost:8080";
-//             var key = "有料テスト-2622925";
-//             PriceListParams priceParams = PriceListParams.builder().addLookupKey(key).build();
-//             PriceCollection prices = Price.list(priceParams);
-//             SessionCreateParams params = SessionCreateParams.builder()
-//                     .addLineItem(
-//                    		 SessionCreateParams.LineItem.builder().setPrice(prices.getData().get(0).getId())
-//                    		 .setQuantity(1L).build())
-//                     .setMode(SessionCreateParams.Mode.SUBSCRIPTION)
-//                     .setSuccessUrl(requestUrl.replaceAll("/user/update", "/user"))
-//                     .setCancelUrl(requestUrl.replaceAll("/user/update", "/user/edit"))
-//                     .build();
-//          サブスクのクレジットカードの変更
-//             Session session = Session.create(params);
-//       	  SessionCreateParams params =
-//       			  SessionCreateParams.builder()
-//       			    .addPaymentMethodType(SessionCreateParams.PaymentMethodType.CARD)
-//       			    .setMode(SessionCreateParams.Mode.SETUP)
-//       			    .setCustomer("cus_REskj8FYkEV1BS")
-//       			    .setSetupIntentData(
-//       			      SessionCreateParams.SetupIntentData.builder()
-//       			        .putMetadata("customer_id", "cus_REskj8FYkEV1BS")
-//       			        .putMetadata("subscription_id", "sub_1QMOymF5qcndg83GvlhIqX15")
-//       			        .build())
-//       			    .setSuccessUrl("https://example.com/success?session_id={CHECKOUT_SESSION_ID}")
-//       			    .setCancelUrl("https://example.com/cancel")
-//       			    .build();
-//       			Session session = Session.create(params);
-//          サブスクの削除
-//	       	Subscription resource = Subscription.retrieve("sub_1QMOymF5qcndg83GvlhIqX15");
-//	       	SubscriptionCancelParams params = SubscriptionCancelParams.builder().build();
-//	       	Subscription subscription = resource.cancel(params);
-//             return String.format("redirect:%s", session.getUrl());
+        	 var requestUrl = new String(httpServletRequest.getRequestURL());
+        	 var success = requestUrl.replaceAll("/user/update", "/user");
+        	 var cancel = requestUrl.replaceAll("/user/update", "/user/edit");
+       	     var session = stripeService.createSubscription(userEditForm.getEmail(), success, cancel);
+             return String.format("redirect:%s", session.getUrl());
          }
+   	     stripeService.deleteSubscription(userEditForm.getEmail());
          
          return "redirect:/user";
-     }    
+     }
+	
+	@GetMapping("/change_card")
+	public String changeCard(
+			@AuthenticationPrincipal UserDetailsImpl userDetailsImpl, 
+			Model model,
+   		 	HttpServletRequest httpServletRequest) {
+		User user = userRepository.getReferenceById(userDetailsImpl.getUser().getId());
+		var contract = stripeService.getContract(user);
+		var requestUrl = new String(httpServletRequest.getRequestURL());
+   	 	var success = requestUrl.replaceAll("/user/change_card", "/user");
+   	 	var cancel = requestUrl.replaceAll("/user/change_card", "/user");
+  	    var session = stripeService.changeSubscriptionCard(contract, success, cancel);
+        return String.format("redirect:%s", session.getUrl());
+	}
+
 }
